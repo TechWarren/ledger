@@ -137,7 +137,7 @@ export default function DashboardPage() {
                 <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => '$' + v.toLocaleString()} />
                 <Tooltip
                   contentStyle={{ background: '#1f2433', border: 'none', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.85rem' }}
-                  formatter={(value) => fmt(Number(value))}
+                  formatter={(value: number) => fmt(value)}
                 />
                 <Bar dataKey="income"   name="Income"   fill="#4ade80" radius={[4,4,0,0]} />
                 <Bar dataKey="expenses" name="Expenses" fill="#f87171" radius={[4,4,0,0]} />
@@ -163,7 +163,7 @@ export default function DashboardPage() {
                 </Pie>
                 <Tooltip
                   contentStyle={{ background: '#1f2433', border: 'none', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.85rem' }}
-                  formatter={(value) => fmt(Number(value))}
+                  formatter={(value: number) => fmt(value)}
                 />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '0.75rem', color: '#9ca3af' }} />
               </PieChart>
