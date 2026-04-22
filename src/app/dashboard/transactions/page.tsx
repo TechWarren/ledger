@@ -27,7 +27,7 @@ async function fetchTransactions() {
     .from('transactions')
     .select('*')
     .order('date', { ascending: false })
-  return data || []
+  return (data || []) as Transaction[]
 }
 
 export default function TransactionsPage() {
@@ -38,6 +38,7 @@ export default function TransactionsPage() {
   const [filterCat, setFilterCat] = useState('all')
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [type, setType] = useState<'income' | 'expense'>('expense')
   const [amount, setAmount] = useState('')
@@ -56,19 +57,38 @@ export default function TransactionsPage() {
   }, [])
 
   const filtered = transactions.filter((t) => {
-    const matchSearch = t.description?.toLowerCase().includes(search.toLowerCase()) || t.category.toLowerCase().includes(search.toLowerCase())
+    const matchSearch =
+      t.description?.toLowerCase().includes(search.toLowerCase()) ||
+      t.category.toLowerCase().includes(search.toLowerCase())
     const matchType = filterType === 'all' || t.type === filterType
-    const matchCat = filterCat === 'all' || t.category === filterCat
+    const matchCat  = filterCat  === 'all' || t.category === filterCat
     return matchSearch && matchType && matchCat
   })
 
   function resetForm() {
+    setEditingId(null)
     setType('expense')
     setAmount('')
     setCategory('Food')
     setDescription('')
     setDate(new Date().toISOString().slice(0, 10))
     setFormError('')
+  }
+
+  function openAdd() {
+    resetForm()
+    setShowModal(true)
+  }
+
+  function openEdit(t: Transaction) {
+    setEditingId(t.id)
+    setType(t.type)
+    setAmount(String(t.amount))
+    setCategory(t.category === 'Income' ? 'Food' : t.category)
+    setDescription(t.description || '')
+    setDate(t.date)
+    setFormError('')
+    setShowModal(true)
   }
 
   async function handleSave() {
@@ -83,19 +103,20 @@ export default function TransactionsPage() {
     }
     setSaving(true)
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('transactions').insert({
-      user_id: user!.id,
+    const payload = {
       type,
       amount: Number(amount),
       category: type === 'income' ? 'Income' : category,
       description,
       date,
-    })
-    if (error) {
-      setFormError(error.message)
-      setSaving(false)
-      return
+    }
+    if (editingId) {
+      const { error } = await supabase.from('transactions').update(payload).eq('id', editingId)
+      if (error) { setFormError(error.message); setSaving(false); return }
+    } else {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error } = await supabase.from('transactions').insert({ ...payload, user_id: user!.id })
+      if (error) { setFormError(error.message); setSaving(false); return }
     }
     const data = await fetchTransactions()
     setTransactions(data)
@@ -126,7 +147,7 @@ export default function TransactionsPage() {
           <p style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '6px' }}>{transactions.length} total transactions</p>
         </div>
         <button
-          onClick={() => { resetForm(); setShowModal(true) }}
+          onClick={openAdd}
           style={{ padding: '10px 20px', background: '#c8a96e', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }}
         >
           + Add Transaction
@@ -134,27 +155,16 @@ export default function TransactionsPage() {
       </div>
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <input
-          type="text"
-          placeholder="Search transactions..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: '200px', padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit' }}
-        />
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          style={{ padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-        >
+        <input type="text" placeholder="Search transactions..." value={search} onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, minWidth: '200px', padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit' }} />
+        <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
+          style={{ padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
           <option value="all">All Types</option>
           <option value="income">Income</option>
           <option value="expense">Expense</option>
         </select>
-        <select
-          value={filterCat}
-          onChange={(e) => setFilterCat(e.target.value)}
-          style={{ padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-        >
+        <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}
+          style={{ padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
           <option value="all">All Categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -177,7 +187,11 @@ export default function TransactionsPage() {
             </thead>
             <tbody>
               {filtered.map((t) => (
-                <tr key={t.id} style={{ borderBottom: '1px solid #1f2433' }}>
+                <tr key={t.id} onClick={() => openEdit(t)}
+                  style={{ borderBottom: '1px solid #1f2433', cursor: 'pointer' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = 'rgba(255,255,255,0.02)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'}
+                >
                   <td style={{ padding: '14px 18px', fontSize: '0.8rem', color: '#6b7280', fontFamily: 'monospace' }}>{t.date}</td>
                   <td style={{ padding: '14px 18px', fontSize: '0.875rem' }}>{t.description || '—'}</td>
                   <td style={{ padding: '14px 18px' }}>
@@ -190,15 +204,21 @@ export default function TransactionsPage() {
                   <td style={{ padding: '14px 18px', fontFamily: 'monospace', fontSize: '0.875rem', color: t.type === 'income' ? '#4ade80' : '#f87171' }}>
                     {t.type === 'income' ? '+' : '-'}{fmt(t.amount)}
                   </td>
-                  <td style={{ padding: '14px 18px' }}>
-                    <button
-                      onClick={() => handleDelete(t.id)}
-                      style={{ background: 'none', border: '1px solid transparent', borderRadius: '6px', color: '#6b7280', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit' }}
-                      onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = '#f87171'; (e.target as HTMLButtonElement).style.color = '#f87171' }}
-                      onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = 'transparent'; (e.target as HTMLButtonElement).style.color = '#6b7280' }}
-                    >
-                      Delete
-                    </button>
+                  <td style={{ padding: '14px 18px' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button onClick={() => openEdit(t)}
+                        style={{ background: 'none', border: '1px solid #1f2433', borderRadius: '6px', color: '#6b7280', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit' }}
+                        onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = '#c8a96e'; (e.target as HTMLButtonElement).style.color = '#c8a96e' }}
+                        onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = '#1f2433'; (e.target as HTMLButtonElement).style.color = '#6b7280' }}>
+                        Edit
+                      </button>
+                      <button onClick={() => handleDelete(t.id)}
+                        style={{ background: 'none', border: '1px solid transparent', borderRadius: '6px', color: '#6b7280', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit' }}
+                        onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = '#f87171'; (e.target as HTMLButtonElement).style.color = '#f87171' }}
+                        onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = 'transparent'; (e.target as HTMLButtonElement).style.color = '#6b7280' }}>
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -208,12 +228,12 @@ export default function TransactionsPage() {
       </div>
 
       {showModal && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowModal(false); resetForm() } }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
-        >
+        <div onClick={(e) => { if (e.target === e.currentTarget) { setShowModal(false); resetForm() } }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
           <div style={{ width: '100%', maxWidth: '460px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '20px', padding: '36px' }}>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '28px' }}>Add Transaction</h2>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '28px' }}>
+              {editingId ? 'Edit Transaction' : 'Add Transaction'}
+            </h2>
 
             {formError && (
               <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '10px', padding: '12px 16px', fontSize: '0.85rem', color: '#f87171', marginBottom: '20px' }}>
@@ -223,18 +243,13 @@ export default function TransactionsPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '20px' }}>
               {(['expense', 'income'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setType(t)}
-                  style={{
-                    padding: '11px', borderRadius: '10px', border: '1px solid',
-                    borderColor: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : '#1f2433',
-                    background: type === t ? (t === 'income' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)') : 'transparent',
-                    color: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : '#6b7280',
-                    fontFamily: 'inherit', fontSize: '0.875rem', fontWeight: 600,
-                    cursor: 'pointer', textTransform: 'capitalize',
-                  }}
-                >
+                <button key={t} onClick={() => setType(t)} style={{
+                  padding: '11px', borderRadius: '10px', border: '1px solid',
+                  borderColor: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : '#1f2433',
+                  background: type === t ? (t === 'income' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)') : 'transparent',
+                  color: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : '#6b7280',
+                  fontFamily: 'inherit', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize',
+                }}>
                   {t === 'income' ? '+ Income' : '- Expense'}
                 </button>
               ))}
@@ -243,35 +258,21 @@ export default function TransactionsPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Amount</label>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.9rem', outline: 'none', fontFamily: 'monospace' }}
-                />
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" min="0" step="0.01" autoFocus
+                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.9rem', outline: 'none', fontFamily: 'monospace' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Date</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }}
-                />
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }} />
               </div>
             </div>
 
             {type === 'expense' && (
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
-                >
+                <select value={category} onChange={(e) => setCategory(e.target.value)}
+                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -279,29 +280,25 @@ export default function TransactionsPage() {
 
             <div style={{ marginBottom: '28px' }}>
               <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Description (optional)</label>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. Grocery run, Netflix, Salary..."
+              <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Grocery run, Netflix, Salary..."
                 style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit' }}
-                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-              />
+                onKeyDown={(e) => e.key === 'Enter' && handleSave()} />
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => { setShowModal(false); resetForm() }}
-                style={{ flex: 1, padding: '12px', background: 'none', border: '1px solid #1f2433', borderRadius: '10px', color: '#6b7280', fontFamily: 'inherit', fontSize: '0.875rem', cursor: 'pointer' }}
-              >
+              <button onClick={() => { setShowModal(false); resetForm() }}
+                style={{ flex: 1, padding: '12px', background: 'none', border: '1px solid #1f2433', borderRadius: '10px', color: '#6b7280', fontFamily: 'inherit', fontSize: '0.875rem', cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                style={{ flex: 2, padding: '12px', background: saving ? '#8a7048' : '#c8a96e', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-              >
-                {saving ? 'Saving...' : 'Save Transaction'}
+              {editingId && (
+                <button onClick={() => { handleDelete(editingId); setShowModal(false); resetForm() }}
+                  style={{ flex: 1, padding: '12px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '10px', color: '#f87171', fontFamily: 'inherit', fontSize: '0.875rem', cursor: 'pointer', fontWeight: 600 }}>
+                  Delete
+                </button>
+              )}
+              <button onClick={handleSave} disabled={saving}
+                style={{ flex: 2, padding: '12px', background: saving ? '#8a7048' : '#c8a96e', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Save Transaction'}
               </button>
             </div>
           </div>
