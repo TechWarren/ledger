@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
 const CATEGORIES = ['Housing', 'Food', 'Transport', 'Healthcare', 'Entertainment', 'Shopping', 'Utilities', 'Other']
@@ -21,6 +21,15 @@ type Transaction = {
 
 const fmt = (n: number) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+async function fetchTransactions() {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('transactions')
+    .select('*')
+    .order('date', { ascending: false })
+  return data || []
+}
+
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -30,7 +39,6 @@ export default function TransactionsPage() {
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Form state
   const [type, setType] = useState<'income' | 'expense'>('expense')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('Food')
@@ -38,19 +46,15 @@ export default function TransactionsPage() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [formError, setFormError] = useState('')
 
-  const load = useCallback(async () => {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('transactions')
-      .select('*')
-      .order('date', { ascending: false })
-    setTransactions(data || [])
-    setLoading(false)
+  useEffect(() => {
+    async function load() {
+      const data = await fetchTransactions()
+      setTransactions(data)
+      setLoading(false)
+    }
+    load()
   }, [])
 
-  useEffect(() => { load() }, [load])
-
-  // Filtered transactions
   const filtered = transactions.filter((t) => {
     const matchSearch = t.description?.toLowerCase().includes(search.toLowerCase()) || t.category.toLowerCase().includes(search.toLowerCase())
     const matchType = filterType === 'all' || t.type === filterType
@@ -77,11 +81,9 @@ export default function TransactionsPage() {
       setFormError('Please select a date')
       return
     }
-
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-
     const { error } = await supabase.from('transactions').insert({
       user_id: user!.id,
       type,
@@ -90,14 +92,13 @@ export default function TransactionsPage() {
       description,
       date,
     })
-
     if (error) {
       setFormError(error.message)
       setSaving(false)
       return
     }
-
-    await load()
+    const data = await fetchTransactions()
+    setTransactions(data)
     setShowModal(false)
     resetForm()
     setSaving(false)
@@ -119,7 +120,6 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 700, lineHeight: 1 }}>Transactions</h1>
@@ -133,7 +133,6 @@ export default function TransactionsPage() {
         </button>
       </div>
 
-      {/* TOOLBAR */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
         <input
           type="text"
@@ -161,7 +160,6 @@ export default function TransactionsPage() {
         </select>
       </div>
 
-      {/* TABLE */}
       <div style={{ background: '#13161e', border: '1px solid #1f2433', borderRadius: '16px', overflow: 'hidden' }}>
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#374151' }}>
@@ -195,7 +193,7 @@ export default function TransactionsPage() {
                   <td style={{ padding: '14px 18px' }}>
                     <button
                       onClick={() => handleDelete(t.id)}
-                      style={{ background: 'none', border: '1px solid transparent', borderRadius: '6px', color: '#6b7280', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit', transition: 'all 0.15s' }}
+                      style={{ background: 'none', border: '1px solid transparent', borderRadius: '6px', color: '#6b7280', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit' }}
                       onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = '#f87171'; (e.target as HTMLButtonElement).style.color = '#f87171' }}
                       onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = 'transparent'; (e.target as HTMLButtonElement).style.color = '#6b7280' }}
                     >
@@ -209,7 +207,6 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* MODAL */}
       {showModal && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) { setShowModal(false); resetForm() } }}
@@ -224,7 +221,6 @@ export default function TransactionsPage() {
               </div>
             )}
 
-            {/* TYPE TOGGLE */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '20px' }}>
               {(['expense', 'income'] as const).map((t) => (
                 <button
@@ -236,7 +232,7 @@ export default function TransactionsPage() {
                     background: type === t ? (t === 'income' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)') : 'transparent',
                     color: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : '#6b7280',
                     fontFamily: 'inherit', fontSize: '0.875rem', fontWeight: 600,
-                    cursor: 'pointer', textTransform: 'capitalize', transition: 'all 0.15s'
+                    cursor: 'pointer', textTransform: 'capitalize',
                   }}
                 >
                   {t === 'income' ? '+ Income' : '- Expense'}
@@ -244,7 +240,6 @@ export default function TransactionsPage() {
               ))}
             </div>
 
-            {/* AMOUNT + DATE */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Amount</label>
@@ -269,7 +264,6 @@ export default function TransactionsPage() {
               </div>
             </div>
 
-            {/* CATEGORY */}
             {type === 'expense' && (
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Category</label>
@@ -283,7 +277,6 @@ export default function TransactionsPage() {
               </div>
             )}
 
-            {/* DESCRIPTION */}
             <div style={{ marginBottom: '28px' }}>
               <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Description (optional)</label>
               <input
@@ -296,7 +289,6 @@ export default function TransactionsPage() {
               />
             </div>
 
-            {/* ACTIONS */}
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={() => { setShowModal(false); resetForm() }}
@@ -312,7 +304,6 @@ export default function TransactionsPage() {
                 {saving ? 'Saving...' : 'Save Transaction'}
               </button>
             </div>
-
           </div>
         </div>
       )}

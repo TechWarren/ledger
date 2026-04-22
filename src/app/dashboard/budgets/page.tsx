@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
 const CATEGORIES = ['Housing', 'Food', 'Transport', 'Healthcare', 'Entertainment', 'Shopping', 'Utilities', 'Other']
@@ -29,6 +29,7 @@ export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [showAdd, setShowAdd] = useState(false)
@@ -36,20 +37,22 @@ export default function BudgetsPage() {
   const [newLimit, setNewLimit] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(async () => {
-    const supabase = createClient()
-    const [{ data: budgetData }, { data: txData }] = await Promise.all([
-      supabase.from('budgets').select('*').order('category'),
-      supabase.from('transactions').select('type, amount, category, date').eq('type', 'expense'),
-    ])
-    setBudgets(budgetData || [])
-    setTransactions(txData || [])
-    setLoading(false)
-  }, [])
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const [{ data: budgetData }, { data: txData }] = await Promise.all([
+        supabase.from('budgets').select('*').order('category'),
+        supabase.from('transactions').select('type, amount, category, date').eq('type', 'expense'),
+      ])
+      setBudgets(budgetData || [])
+      setTransactions(txData || [])
+      setLoading(false)
+    }
+    load()
+  }, [refreshKey])
 
-  useEffect(() => { load() }, [load])
+  const refresh = () => setRefreshKey(k => k + 1)
 
-  // Get this month's spending per category
   const now = new Date()
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
@@ -65,9 +68,9 @@ export default function BudgetsPage() {
     setSaving(true)
     const supabase = createClient()
     await supabase.from('budgets').update({ monthly_limit: val }).eq('id', budget.id)
-    await load()
     setEditingId(null)
     setSaving(false)
+    refresh()
   }
 
   async function handleAddBudget() {
@@ -81,10 +84,10 @@ export default function BudgetsPage() {
       category: newCategory,
       monthly_limit: val,
     }, { onConflict: 'user_id,category' })
-    await load()
     setShowAdd(false)
     setNewLimit('')
     setSaving(false)
+    refresh()
   }
 
   async function handleDelete(id: string) {
@@ -105,7 +108,6 @@ export default function BudgetsPage() {
 
   return (
     <div>
-      {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 700, lineHeight: 1 }}>Budgets</h1>
@@ -123,7 +125,6 @@ export default function BudgetsPage() {
         )}
       </div>
 
-      {/* EMPTY STATE */}
       {budgets.length === 0 && (
         <div style={{ textAlign: 'center', padding: '80px 20px', color: '#374151' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🎯</div>
@@ -139,7 +140,6 @@ export default function BudgetsPage() {
         </div>
       )}
 
-      {/* BUDGET CARDS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
         {budgets.map((budget) => {
           const spent = getSpent(budget.category)
@@ -148,13 +148,9 @@ export default function BudgetsPage() {
           const over = spent > budget.monthly_limit
           const color = COLORS[budget.category] || '#6b7280'
           const barColor = pct >= 100 ? '#f87171' : pct >= 80 ? '#fb923c' : color
-
           return (
             <div key={budget.id} style={{ background: '#13161e', border: '1px solid #1f2433', borderRadius: '16px', padding: '24px', position: 'relative', overflow: 'hidden' }}>
-              {/* Top accent */}
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: barColor }} />
-
-              {/* Category header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, display: 'inline-block' }} />
@@ -170,7 +166,6 @@ export default function BudgetsPage() {
                 </button>
               </div>
 
-              {/* Amounts */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px' }}>
                 <span style={{ fontFamily: 'monospace', fontSize: '1.4rem', fontWeight: 700, color: over ? '#f87171' : '#e8e4dc' }}>
                   {fmt(spent)}
@@ -202,25 +197,21 @@ export default function BudgetsPage() {
                 )}
               </div>
 
-              {/* Progress bar */}
               <div style={{ height: '6px', background: '#1f2433', borderRadius: '3px', overflow: 'hidden', marginBottom: '10px' }}>
                 <div style={{ width: pct + '%', height: '100%', background: barColor, borderRadius: '3px', transition: 'width 0.4s ease' }} />
               </div>
 
-              {/* Footer */}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#6b7280' }}>
                 <span>{pct.toFixed(0)}% used</span>
                 <span style={{ color: over ? '#f87171' : remaining < budget.monthly_limit * 0.2 ? '#fb923c' : '#4ade80' }}>
                   {over ? fmt(Math.abs(remaining)) + ' over' : fmt(remaining) + ' left'}
                 </span>
               </div>
-
             </div>
           )
         })}
       </div>
 
-      {/* ADD BUDGET MODAL */}
       {showAdd && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowAdd(false) }}
@@ -228,7 +219,6 @@ export default function BudgetsPage() {
         >
           <div style={{ width: '100%', maxWidth: '400px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '20px', padding: '36px' }}>
             <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '28px' }}>Set Budget Limit</h2>
-
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Category</label>
               <select
@@ -239,7 +229,6 @@ export default function BudgetsPage() {
                 {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-
             <div style={{ marginBottom: '28px' }}>
               <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Monthly Limit</label>
               <input
@@ -254,7 +243,6 @@ export default function BudgetsPage() {
                 onKeyDown={(e) => e.key === 'Enter' && handleAddBudget()}
               />
             </div>
-
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={() => setShowAdd(false)}
@@ -273,7 +261,6 @@ export default function BudgetsPage() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
