@@ -17,6 +17,7 @@ type Transaction = {
   category: string
   description: string
   date: string
+  is_recurring?: boolean
 }
 
 const fmt = (n: number) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -39,12 +40,14 @@ export default function TransactionsPage() {
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [generatingRecurring, setGeneratingRecurring] = useState(false)
 
   const [type, setType] = useState<'income' | 'expense'>('expense')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('Food')
   const [description, setDescription] = useState('')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [isRecurring, setIsRecurring] = useState(false)
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
@@ -65,6 +68,25 @@ export default function TransactionsPage() {
     return matchSearch && matchType && matchCat
   })
 
+  const currentMonth = new Date().toISOString().slice(0, 7)
+
+  // Find recurring transactions not yet added for the current month
+  const pendingRecurring = (() => {
+    const templates = new Map<string, Transaction>()
+    for (const t of [...transactions].reverse()) {
+      if (t.is_recurring) {
+        const key = `${t.type}:${t.category}:${t.description}`
+        templates.set(key, t)
+      }
+    }
+    const thisMonthRecurring = transactions.filter(t => t.date.startsWith(currentMonth) && t.is_recurring)
+    return [...templates.values()].filter(t =>
+      !thisMonthRecurring.some(ct =>
+        ct.type === t.type && ct.category === t.category && ct.description === t.description
+      )
+    )
+  })()
+
   function resetForm() {
     setEditingId(null)
     setType('expense')
@@ -72,6 +94,7 @@ export default function TransactionsPage() {
     setCategory('Food')
     setDescription('')
     setDate(new Date().toISOString().slice(0, 10))
+    setIsRecurring(false)
     setFormError('')
   }
 
@@ -87,6 +110,7 @@ export default function TransactionsPage() {
     setCategory(t.category === 'Income' ? 'Food' : t.category)
     setDescription(t.description || '')
     setDate(t.date)
+    setIsRecurring(!!t.is_recurring)
     setFormError('')
     setShowModal(true)
   }
@@ -109,6 +133,7 @@ export default function TransactionsPage() {
       category: type === 'income' ? 'Income' : category,
       description,
       date,
+      is_recurring: isRecurring,
     }
     if (editingId) {
       const { error } = await supabase.from('transactions').update(payload).eq('id', editingId)
@@ -131,69 +156,143 @@ export default function TransactionsPage() {
     setTransactions(prev => prev.filter(t => t.id !== id))
   }
 
+  async function generateRecurring() {
+    setGeneratingRecurring(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const today = new Date().toISOString().slice(0, 10)
+    for (const t of pendingRecurring) {
+      await supabase.from('transactions').insert({
+        user_id: user!.id,
+        type: t.type,
+        amount: t.amount,
+        category: t.category,
+        description: t.description,
+        date: today,
+        is_recurring: true,
+      })
+    }
+    const data = await fetchTransactions()
+    setTransactions(data)
+    setGeneratingRecurring(false)
+  }
+
+  function exportCSV() {
+    const headers = ['Date', 'Type', 'Category', 'Description', 'Amount', 'Recurring']
+    const rows = filtered.map(t => [
+      t.date,
+      t.type,
+      t.category,
+      `"${(t.description || '').replace(/"/g, '""')}"`,
+      t.type === 'income' ? t.amount : -t.amount,
+      t.is_recurring ? 'Yes' : 'No',
+    ])
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ledger-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: '#6b7280' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--muted)' }}>
         Loading transactions...
       </div>
     )
   }
+
+  const inputStyle = { padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text)', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit' }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 700, lineHeight: 1 }}>Transactions</h1>
-          <p style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '6px' }}>{transactions.length} total transactions</p>
+          <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '6px' }}>{transactions.length} total transactions</p>
         </div>
-        <button
-          onClick={openAdd}
-          style={{ padding: '10px 20px', background: '#c8a96e', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          + Add Transaction
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={exportCSV}
+            style={{ padding: '10px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--muted)', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={openAdd}
+            style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            + Add Transaction
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <input type="text" placeholder="Search transactions..." value={search} onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: '200px', padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit' }} />
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-          style={{ padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+          style={{ ...inputStyle, flex: 1, minWidth: '200px' }} />
+        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
           <option value="all">All Types</option>
           <option value="income">Income</option>
           <option value="expense">Expense</option>
         </select>
-        <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}
-          style={{ padding: '10px 14px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+        <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
           <option value="all">All Categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
-      <div style={{ background: '#13161e', border: '1px solid #1f2433', borderRadius: '16px', overflow: 'hidden' }}>
+      {pendingRecurring.length > 0 && (
+        <div style={{ background: 'rgba(200,169,110,0.1)', border: '1px solid rgba(200,169,110,0.3)', borderRadius: '12px', padding: '14px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div>
+            <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.875rem' }}>
+              {pendingRecurring.length} recurring transaction{pendingRecurring.length !== 1 ? 's' : ''} due
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--muted)', marginLeft: '8px' }}>
+              for {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+            </span>
+          </div>
+          <button
+            onClick={generateRecurring}
+            disabled={generatingRecurring}
+            style={{ padding: '7px 16px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.8rem', cursor: generatingRecurring ? 'not-allowed' : 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
+          >
+            {generatingRecurring ? 'Adding...' : 'Add Now'}
+          </button>
+        </div>
+      )}
+
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', overflow: 'hidden' }}>
         {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#374151' }}>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted2)' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>💳</div>
             <p style={{ fontSize: '0.9rem' }}>{transactions.length === 0 ? 'No transactions yet — add your first one!' : 'No transactions match your filters'}</p>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#0a0a0f' }}>
+              <tr style={{ background: 'var(--bg)' }}>
                 {['Date', 'Description', 'Category', 'Type', 'Amount', ''].map(h => (
-                  <th key={h} style={{ padding: '13px 18px', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#6b7280', textAlign: 'left', borderBottom: '1px solid #1f2433' }}>{h}</th>
+                  <th key={h} style={{ padding: '13px 18px', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'var(--muted)', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map((t) => (
                 <tr key={t.id} onClick={() => openEdit(t)}
-                  style={{ borderBottom: '1px solid #1f2433', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = 'rgba(255,255,255,0.02)'}
+                  style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = 'var(--row-hover)'}
                   onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'}
                 >
-                  <td style={{ padding: '14px 18px', fontSize: '0.8rem', color: '#6b7280', fontFamily: 'monospace' }}>{t.date}</td>
-                  <td style={{ padding: '14px 18px', fontSize: '0.875rem' }}>{t.description || '—'}</td>
+                  <td style={{ padding: '14px 18px', fontSize: '0.8rem', color: 'var(--muted)', fontFamily: 'monospace' }}>{t.date}</td>
+                  <td style={{ padding: '14px 18px', fontSize: '0.875rem' }}>
+                    {t.description || '—'}
+                    {t.is_recurring && (
+                      <span style={{ marginLeft: '8px', fontSize: '0.7rem', padding: '1px 6px', borderRadius: '999px', background: 'rgba(200,169,110,0.12)', color: 'var(--accent)' }}>↻</span>
+                    )}
+                  </td>
                   <td style={{ padding: '14px 18px' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 500, background: `${COLORS[t.category] || '#6b7280'}18`, color: COLORS[t.category] || '#6b7280' }}>
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: COLORS[t.category] || '#6b7280' }} />
@@ -207,15 +306,15 @@ export default function TransactionsPage() {
                   <td style={{ padding: '14px 18px' }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button onClick={() => openEdit(t)}
-                        style={{ background: 'none', border: '1px solid #1f2433', borderRadius: '6px', color: '#6b7280', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit' }}
-                        onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = '#c8a96e'; (e.target as HTMLButtonElement).style.color = '#c8a96e' }}
-                        onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = '#1f2433'; (e.target as HTMLButtonElement).style.color = '#6b7280' }}>
+                        style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--muted)', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit' }}
+                        onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = 'var(--accent)'; (e.target as HTMLButtonElement).style.color = 'var(--accent)' }}
+                        onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.target as HTMLButtonElement).style.color = 'var(--muted)' }}>
                         Edit
                       </button>
                       <button onClick={() => handleDelete(t.id)}
-                        style={{ background: 'none', border: '1px solid transparent', borderRadius: '6px', color: '#6b7280', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit' }}
+                        style={{ background: 'none', border: '1px solid transparent', borderRadius: '6px', color: 'var(--muted)', cursor: 'pointer', padding: '4px 10px', fontSize: '0.8rem', fontFamily: 'inherit' }}
                         onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = '#f87171'; (e.target as HTMLButtonElement).style.color = '#f87171' }}
-                        onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = 'transparent'; (e.target as HTMLButtonElement).style.color = '#6b7280' }}>
+                        onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = 'transparent'; (e.target as HTMLButtonElement).style.color = 'var(--muted)' }}>
                         Delete
                       </button>
                     </div>
@@ -229,8 +328,8 @@ export default function TransactionsPage() {
 
       {showModal && (
         <div onClick={(e) => { if (e.target === e.currentTarget) { setShowModal(false); resetForm() } }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div style={{ width: '100%', maxWidth: '460px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '20px', padding: '36px' }}>
+          style={{ position: 'fixed', inset: 0, background: 'var(--overlay)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div style={{ width: '100%', maxWidth: '460px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '20px', padding: '36px' }}>
             <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '28px' }}>
               {editingId ? 'Edit Transaction' : 'Add Transaction'}
             </h2>
@@ -245,9 +344,9 @@ export default function TransactionsPage() {
               {(['expense', 'income'] as const).map((t) => (
                 <button key={t} onClick={() => setType(t)} style={{
                   padding: '11px', borderRadius: '10px', border: '1px solid',
-                  borderColor: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : '#1f2433',
+                  borderColor: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : 'var(--border)',
                   background: type === t ? (t === 'income' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)') : 'transparent',
-                  color: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : '#6b7280',
+                  color: type === t ? (t === 'income' ? '#4ade80' : '#f87171') : 'var(--muted)',
                   fontFamily: 'inherit', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize',
                 }}>
                   {t === 'income' ? '+ Income' : '- Expense'}
@@ -257,37 +356,50 @@ export default function TransactionsPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Amount</label>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '7px' }}>Amount</label>
                 <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" min="0" step="0.01" autoFocus
-                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.9rem', outline: 'none', fontFamily: 'monospace' }} />
+                  style={{ width: '100%', padding: '11px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text)', fontSize: '0.9rem', outline: 'none', fontFamily: 'monospace' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Date</label>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '7px' }}>Date</label>
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }} />
+                  style={{ width: '100%', padding: '11px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text)', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit' }} />
               </div>
             </div>
 
             {type === 'expense' && (
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Category</label>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '7px' }}>Category</label>
                 <select value={category} onChange={(e) => setCategory(e.target.value)}
-                  style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                  style={{ width: '100%', padding: '11px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text)', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             )}
 
-            <div style={{ marginBottom: '28px' }}>
-              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Description (optional)</label>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '7px' }}>Description (optional)</label>
               <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Grocery run, Netflix, Salary..."
-                style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit' }}
+                style={{ width: '100%', padding: '11px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text)', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit' }}
                 onKeyDown={(e) => e.key === 'Enter' && handleSave()} />
+            </div>
+
+            <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="checkbox"
+                id="recurring-check"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent)' }}
+              />
+              <label htmlFor="recurring-check" style={{ fontSize: '0.875rem', color: 'var(--muted)', cursor: 'pointer' }}>
+                Recurring monthly
+              </label>
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => { setShowModal(false); resetForm() }}
-                style={{ flex: 1, padding: '12px', background: 'none', border: '1px solid #1f2433', borderRadius: '10px', color: '#6b7280', fontFamily: 'inherit', fontSize: '0.875rem', cursor: 'pointer' }}>
+                style={{ flex: 1, padding: '12px', background: 'none', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--muted)', fontFamily: 'inherit', fontSize: '0.875rem', cursor: 'pointer' }}>
                 Cancel
               </button>
               {editingId && (
@@ -297,7 +409,7 @@ export default function TransactionsPage() {
                 </button>
               )}
               <button onClick={handleSave} disabled={saving}
-                style={{ flex: 2, padding: '12px', background: saving ? '#8a7048' : '#c8a96e', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                style={{ flex: 2, padding: '12px', background: saving ? '#8a7048' : 'var(--accent)', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
                 {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Save Transaction'}
               </button>
             </div>

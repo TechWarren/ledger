@@ -100,25 +100,27 @@ export default function BudgetsPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: '#6b7280' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--muted)' }}>
         Loading budgets...
       </div>
     )
   }
+
+  const inputStyle = { width: '100%', padding: '11px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text)', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 700, lineHeight: 1 }}>Budgets</h1>
-          <p style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '6px' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '6px' }}>
             Monthly limits for {now.toLocaleString('default', { month: 'long', year: 'numeric' })}
           </p>
         </div>
         {availableCategories.length > 0 && (
           <button
             onClick={() => { setNewCategory(availableCategories[0]); setShowAdd(true) }}
-            style={{ padding: '10px 20px', background: '#c8a96e', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }}
           >
             + Add Budget
           </button>
@@ -126,13 +128,13 @@ export default function BudgetsPage() {
       </div>
 
       {budgets.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '80px 20px', color: '#374151' }}>
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--muted2)' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🎯</div>
           <p style={{ fontSize: '0.9rem', marginBottom: '20px' }}>No budgets set yet. Add a category limit to start tracking.</p>
           {availableCategories.length > 0 && (
             <button
               onClick={() => { setNewCategory(availableCategories[0]); setShowAdd(true) }}
-              style={{ padding: '12px 24px', background: '#c8a96e', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }}
+              style={{ padding: '12px 24px', background: 'var(--accent)', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }}
             >
               Set Your First Budget
             </button>
@@ -149,7 +151,7 @@ export default function BudgetsPage() {
           const color = COLORS[budget.category] || '#6b7280'
           const barColor = pct >= 100 ? '#f87171' : pct >= 80 ? '#fb923c' : color
           return (
-            <div key={budget.id} style={{ background: '#13161e', border: '1px solid #1f2433', borderRadius: '16px', padding: '24px', position: 'relative', overflow: 'hidden' }}>
+            <div key={budget.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: barColor }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -158,16 +160,16 @@ export default function BudgetsPage() {
                 </div>
                 <button
                   onClick={() => handleDelete(budget.id)}
-                  style={{ background: 'none', border: 'none', color: '#374151', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit', padding: '2px 6px' }}
+                  style={{ background: 'none', border: 'none', color: 'var(--muted2)', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit', padding: '2px 6px' }}
                   onMouseEnter={e => (e.target as HTMLButtonElement).style.color = '#f87171'}
-                  onMouseLeave={e => (e.target as HTMLButtonElement).style.color = '#374151'}
+                  onMouseLeave={e => (e.target as HTMLButtonElement).style.color = 'var(--muted2)'}
                 >
                   Remove
                 </button>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px' }}>
-                <span style={{ fontFamily: 'monospace', fontSize: '1.4rem', fontWeight: 700, color: over ? '#f87171' : '#e8e4dc' }}>
+                <span style={{ fontFamily: 'monospace', fontSize: '1.4rem', fontWeight: 700, color: over ? '#f87171' : 'var(--text)' }}>
                   {fmt(spent)}
                 </span>
                 {editingId === budget.id ? (
@@ -177,31 +179,31 @@ export default function BudgetsPage() {
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
                       autoFocus
-                      style={{ width: '90px', padding: '4px 8px', background: '#0a0a0f', border: '1px solid #c8a96e', borderRadius: '7px', color: '#e8e4dc', fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none', textAlign: 'right' }}
+                      style={{ width: '90px', padding: '4px 8px', background: 'var(--bg)', border: '1px solid var(--accent)', borderRadius: '7px', color: 'var(--text)', fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none', textAlign: 'right' }}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateLimit(budget); if (e.key === 'Escape') setEditingId(null) }}
                     />
-                    <button onClick={() => handleUpdateLimit(budget)} disabled={saving} style={{ background: '#c8a96e', border: 'none', borderRadius: '6px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', padding: '4px 8px', fontFamily: 'inherit' }}>
+                    <button onClick={() => handleUpdateLimit(budget)} disabled={saving} style={{ background: 'var(--accent)', border: 'none', borderRadius: '6px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', padding: '4px 8px', fontFamily: 'inherit' }}>
                       {saving ? '...' : 'Save'}
                     </button>
-                    <button onClick={() => setEditingId(null)} style={{ background: 'none', border: '1px solid #1f2433', borderRadius: '6px', color: '#6b7280', fontSize: '0.75rem', cursor: 'pointer', padding: '4px 8px', fontFamily: 'inherit' }}>
+                    <button onClick={() => setEditingId(null)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--muted)', fontSize: '0.75rem', cursor: 'pointer', padding: '4px 8px', fontFamily: 'inherit' }}>
                       Cancel
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={() => { setEditingId(budget.id); setEditValue(String(budget.monthly_limit)) }}
-                    style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline dotted' }}
+                    style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline dotted' }}
                   >
                     of {fmt(budget.monthly_limit)}
                   </button>
                 )}
               </div>
 
-              <div style={{ height: '6px', background: '#1f2433', borderRadius: '3px', overflow: 'hidden', marginBottom: '10px' }}>
+              <div style={{ height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden', marginBottom: '10px' }}>
                 <div style={{ width: pct + '%', height: '100%', background: barColor, borderRadius: '3px', transition: 'width 0.4s ease' }} />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#6b7280' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--muted)' }}>
                 <span>{pct.toFixed(0)}% used</span>
                 <span style={{ color: over ? '#f87171' : remaining < budget.monthly_limit * 0.2 ? '#fb923c' : '#4ade80' }}>
                   {over ? fmt(Math.abs(remaining)) + ' over' : fmt(remaining) + ' left'}
@@ -215,22 +217,22 @@ export default function BudgetsPage() {
       {showAdd && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowAdd(false) }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
+          style={{ position: 'fixed', inset: 0, background: 'var(--overlay)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
         >
-          <div style={{ width: '100%', maxWidth: '400px', background: '#13161e', border: '1px solid #1f2433', borderRadius: '20px', padding: '36px' }}>
+          <div style={{ width: '100%', maxWidth: '400px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '20px', padding: '36px' }}>
             <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '28px' }}>Set Budget Limit</h2>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Category</label>
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '7px' }}>Category</label>
               <select
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value)}
-                style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
+                style={inputStyle}
               >
                 {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div style={{ marginBottom: '28px' }}>
-              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: '7px' }}>Monthly Limit</label>
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '7px' }}>Monthly Limit</label>
               <input
                 type="number"
                 value={newLimit}
@@ -239,21 +241,21 @@ export default function BudgetsPage() {
                 autoFocus
                 min="0"
                 step="0.01"
-                style={{ width: '100%', padding: '11px 14px', background: '#0a0a0f', border: '1px solid #1f2433', borderRadius: '10px', color: '#e8e4dc', fontSize: '0.9rem', outline: 'none', fontFamily: 'monospace' }}
+                style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '0.9rem', cursor: 'text' }}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddBudget()}
               />
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={() => setShowAdd(false)}
-                style={{ flex: 1, padding: '12px', background: 'none', border: '1px solid #1f2433', borderRadius: '10px', color: '#6b7280', fontFamily: 'inherit', fontSize: '0.875rem', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '12px', background: 'none', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--muted)', fontFamily: 'inherit', fontSize: '0.875rem', cursor: 'pointer' }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddBudget}
                 disabled={saving}
-                style={{ flex: 2, padding: '12px', background: saving ? '#8a7048' : '#c8a96e', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                style={{ flex: 2, padding: '12px', background: saving ? '#8a7048' : 'var(--accent)', border: 'none', borderRadius: '10px', color: '#0a0a0f', fontWeight: 700, fontSize: '0.875rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
               >
                 {saving ? 'Saving...' : 'Save Budget'}
               </button>

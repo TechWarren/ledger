@@ -4,26 +4,21 @@ import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { useTheme } from '@/lib/theme'
 
 const navItems = [
-  { href: '/dashboard',              label: 'Overview',     icon: '📊' },
-  { href: '/dashboard/transactions', label: 'Transactions', icon: '💳' },
-  { href: '/dashboard/budgets',      label: 'Budgets',      icon: '🎯' },
+  { href: '/dashboard',              label: 'Overview',      icon: '📊' },
+  { href: '/dashboard/transactions', label: 'Transactions',  icon: '💳' },
+  { href: '/dashboard/budgets',      label: 'Budgets',       icon: '🎯' },
+  { href: '/dashboard/reports',      label: 'Reports',       icon: '📈' },
+  { href: '/dashboard/profile',      label: 'Profile',       icon: '👤' },
 ]
-
-const sidebarStyle = {
-  display: 'flex' as const,
-  flexDirection: 'column' as const,
-  height: '100vh',
-  padding: '28px 16px',
-  background: '#13161e',
-  borderRight: '1px solid #1f2433',
-}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router   = useRouter()
   const [open, setOpen] = useState(false)
+  const { theme, toggle } = useTheme()
 
   async function handleLogout() {
     const supabase = createClient()
@@ -32,9 +27,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.refresh()
   }
 
+  const sidebarStyle = {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    height: '100vh',
+    padding: '28px 16px',
+    background: 'var(--surface)',
+    borderRight: '1px solid var(--border)',
+  }
+
   const navContent = (
     <>
-      <Link href="/" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#c8a96e', textDecoration: 'none', paddingLeft: '8px', marginBottom: '36px', display: 'block' }}>
+      <Link href="/" style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none', paddingLeft: '8px', marginBottom: '36px', display: 'block' }}>
         Ledger
       </Link>
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
@@ -50,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 padding: '10px 12px', borderRadius: '10px',
                 fontSize: '0.875rem', fontWeight: 500, textDecoration: 'none',
                 background: active ? 'rgba(200,169,110,0.12)' : 'transparent',
-                color: active ? '#c8a96e' : '#6b7280',
+                color: active ? 'var(--accent)' : 'var(--muted)',
               }}
             >
               <span>{item.icon}</span>
@@ -59,10 +63,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )
         })}
       </nav>
-      <div style={{ borderTop: '1px solid #1f2433', paddingTop: '16px' }}>
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <button
+          onClick={toggle}
+          style={{ width: '100%', padding: '9px 12px', background: 'none', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--muted)', fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          <span>{theme === 'dark' ? '☀' : '☾'}</span>
+          <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+        </button>
         <button
           onClick={handleLogout}
-          style={{ width: '100%', padding: '10px 12px', background: 'none', border: '1px solid #1f2433', borderRadius: '10px', color: '#6b7280', fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+          style={{ width: '100%', padding: '9px 12px', background: 'none', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--muted)', fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
         >
           Sign Out
         </button>
@@ -71,7 +82,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   )
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#0a0a0f', color: '#e8e4dc' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
 
       {/* DESKTOP SIDEBAR */}
       <aside className="desktop-sidebar" style={{ ...sidebarStyle, width: '220px', flexShrink: 0, position: 'fixed', top: 0, left: 0, zIndex: 20 }}>
@@ -79,11 +90,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* MOBILE TOP BAR */}
-      <div className="mobile-topbar" style={{ display: 'none', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 30, background: '#13161e', borderBottom: '1px solid #1f2433', padding: '14px 20px', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href="/" style={{ fontSize: '1.1rem', fontWeight: 700, color: '#c8a96e', textDecoration: 'none' }}>Ledger</Link>
+      <div className="mobile-topbar" style={{ display: 'none', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 30, background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '14px 20px', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Link href="/" style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>Ledger</Link>
         <button
           onClick={() => setOpen(!open)}
-          style={{ background: 'none', border: '1px solid #1f2433', borderRadius: '8px', color: '#e8e4dc', cursor: 'pointer', padding: '6px 12px', fontSize: '1rem', lineHeight: 1 }}
+          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text)', cursor: 'pointer', padding: '6px 12px', fontSize: '1rem', lineHeight: 1 }}
         >
           {open ? '✕' : '☰'}
         </button>
@@ -94,7 +105,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div
           className="mobile-overlay"
           onClick={() => setOpen(false)}
-          style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 28, backdropFilter: 'blur(2px)' }}
+          style={{ display: 'none', position: 'fixed', inset: 0, background: 'var(--overlay)', zIndex: 28, backdropFilter: 'blur(2px)' }}
         />
       )}
 

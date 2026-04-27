@@ -10,9 +10,35 @@ html {
   scroll-behavior: smooth;
 }
 
+:root {
+  color-scheme: dark;
+  --bg: #0a0a0f;
+  --surface: #13161e;
+  --border: #1f2433;
+  --text: #e8e4dc;
+  --muted: #6b7280;
+  --muted2: #374151;
+  --accent: #c8a96e;
+  --overlay: rgba(0, 0, 0, 0.7);
+  --row-hover: rgba(255, 255, 255, 0.025);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --border: #e2ddd6;
+  --text: #1a1815;
+  --muted: #64748b;
+  --muted2: #94a3b8;
+  --accent: #c8a96e;
+  --overlay: rgba(0, 0, 0, 0.4);
+  --row-hover: rgba(0, 0, 0, 0.025);
+}
+
 body {
-  background: #0a0a0f;
-  color: #e8e4dc;
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
